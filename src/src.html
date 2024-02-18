@@ -14,8 +14,12 @@
                 execution.interruptSet = true;
                 const result = document.getElementById("result");
                 result.value += "Interrupting...\n";
-                await execution.promise;
-                result.value = "";
+                try {
+                    await execution.promise;
+                    result.value = "";
+                } catch (e) {
+                    result.value = new String(e);
+                }
                 execution = undefined;
             }
             async function run() {
@@ -32,7 +36,7 @@
                     }
                 }
                 execution = exec;
-                execution.promise = document.compile(textArea.value, exec);
+                execution.promise = document.compile(textArea.value, exec).catch(e => result.value += new String(e));
             }
         </script>
         <style type="text/css">
@@ -57,7 +61,19 @@
     <body>
         <div class="row">
             <div class="column">
-                <textarea id="code" style="width: 95%; height: 90%; resize: none;"></textarea>
+                <textarea id="code" style="width: 95%; height: 90%; resize: none;">
+                    1
+                    2.5
+                    false
+                    true
+                    null
+                    (quote a)
+                    (quote 1)
+                    (quote 2.5)
+                    (quote false)
+                    (quote true)
+                    (quote null)
+                </textarea>
                 <button onclick="run()">Run</button>
                 <button onclick="interrupt()">Interrupt</button>
             </div>

@@ -1,0 +1,65 @@
+---
+import * as ast from "./ast";
+---
+
+start := _ els={pos=@ el=element _}* _
+    .expr = Array<[ast.PosInfo, ast.Expr]> { return this.els.map(x => [x.pos, x.el.expr]) }
+
+list := _ pos=@ '\(' _ sub={els=element _}* _ '\)' _
+    .expr = ast.Application {
+        return {
+            kind: "app",
+            pos: this.pos,
+            exprs: this.sub.map(x => x.els.expr)
+        }
+    }
+
+element :=
+    e=list
+        .expr = ast.Expr { return this.e.expr }
+    | e=literal
+        .expr = ast.Expr { return this.e.expr }
+    | e=ident
+        .expr = ast.Expr { return this.e.expr }
+
+literal :=
+    e=integer
+        .expr = ast.Expr { return this.e.expr }
+    | e=real
+        .expr = ast.Expr { return this.e.expr }
+    | e=bool
+        .expr = ast.Expr { return this.e.expr }
+    | e=nll
+        .expr = ast.Expr { return this.e.expr }
+
+real := pos=@ str='[\-+]?[0-9]+\.[0-9]+'
+    .expr = ast.Literal {
+        return {
+            kind: "literal",
+            pos: this.pos,
+            value: Number.parseFloat(this.str)
+        }
+    }
+
+integer := pos=@ str='[\-+]?[0-9]+' !'\.'
+    .expr = ast.Literal {
+        return {
+            kind: "literal",
+            pos: this.pos,
+            value: BigInt(this.str)
+        }
+    }
+
+bool :=
+    pos=@ 'true\b'
+    .expr = ast.Literal { return { kind: "literal", pos: this.pos, value: true } }
+    | pos=@ 'false\b'
+    .expr = ast.Literal { return { kind: "literal", pos: this.pos, value: false } }
+
+nll := pos=@ 'null\b'
+    .expr = ast.Literal { return { kind: "literal", pos: this.pos, value: null } }
+
+ident := pos=@ str='[a-zA-Z][a-zA-Z0-9]*'
+    .expr = ast.Ident { return { kind: "ident", pos: this.pos, name: this.str } }
+
+_ := '[\s\n]*'

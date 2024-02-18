@@ -5,7 +5,7 @@ import * as fs from 'node:fs/promises'
 const { describe, test, expect } = require('@jest/globals');
 
 % Dir.glob("#{__dir__}/**/*.lisp").each { |f|
-%   rel = Pathname.new(f).relative_path_from(__dir__)
+%   rel = Pathname.new(f).relative_path_from(__dir__).to_s
 test('<%= rel %>', async () => {
     const buf = Array.of<string>()
     const exec: interpreter.Execution = {
@@ -14,8 +14,26 @@ test('<%= rel %>', async () => {
             return false
         },
     }
-    const program = await fs.readFile(`${__dirname}/<%= rel %>`)
-    await interpreter.run(program.toString(), exec)
+    const program = (await fs.readFile(`${__dirname}/<%= rel %>`)).toString()
+%   expOut = rel.gsub(/\.lisp$/, '.stdout')
+    let exp: string | undefined = undefined
+    try {
+        exp = (await fs.readFile(`${__dirname}/<%= expOut%>`)).toString()
+    } catch (e) {
+        // ignore
+    }
+    let got = ''
+    try {
+        await interpreter.run(program, exec)
+        got = buf.join('')
+    } catch (e) {
+        got = String(e)
+    }
+    if (exp === undefined) {
+        await fs.writeFile(`${__dirname}/<%= expOut%>`, got)
+    } else {
+        expect(got).toEqual(got)
+    }
 })
 
 % }
