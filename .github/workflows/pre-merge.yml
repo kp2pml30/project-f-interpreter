@@ -1,0 +1,21 @@
+name: Pre-merge tests
+run-name: ${{ github.actor }} is testing out GitHub Actions
+on: [push]
+jobs:
+  Run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - run: sudo apt-get -y update
+      - run: sudo apt-get -y install ruby npm
+      - run: sudo npm install -g n
+      - run: sudo n install 21.4
+      - run: cd ${{ github.workspace }}
+      - run: npm install
+      - run: npm run build:parser
+      - run: erb ./test/make-gold.erb > ./test/gold.ts
+      - run: git diff --exit-code
+      - run: npm test
