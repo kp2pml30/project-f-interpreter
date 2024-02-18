@@ -1,0 +1,69 @@
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>Project f</title>
+        <script>
+            let execution;
+            async function interrupt() {
+                if (execution === undefined) {
+                    return;
+                }
+                if (execution.interruptSet) {
+                    return;
+                }
+                execution.interruptSet = true;
+                const result = document.getElementById("result");
+                result.value += "Interrupting...\n";
+                await execution.promise;
+                result.value = "";
+                execution = undefined;
+            }
+            async function run() {
+                while (execution !== undefined) {
+                    await interrupt();
+                }
+                const textArea = document.getElementById("code");
+                const result = document.getElementById("result");
+                const exec = {
+                    interruptSet: false,
+                    print: (x) => { result.value += x },
+                    shouldInterrupt: function() {
+                        return this.interruptSet;
+                    }
+                }
+                execution = exec;
+                execution.promise = document.compile(textArea.value, exec);
+            }
+        </script>
+        <style type="text/css">
+            .row {
+               display: flex;
+               width: 100vw;
+               height: 100vh;
+            }
+
+            .column {
+                flex: 50%;
+            }
+            body {
+                overflow: hidden;
+            }
+            * {
+                background-color: black;
+                color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="row">
+            <div class="column">
+                <textarea id="code" style="width: 95%; height: 90%; resize: none;"></textarea>
+                <button onclick="run()">Run</button>
+                <button onclick="interrupt()">Interrupt</button>
+            </div>
+            <div class="column">
+                <textarea id="result" disabled style="width: 95%; height: 90%; resize: none;"></textarea>
+            </div>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "noImplicitAny": true,
+    "module": "es6",
+    "target": "ES2017",
+    "allowJs": false,
+    "paths": {
+      "project-f/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+}
