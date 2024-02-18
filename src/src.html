@@ -27,6 +27,8 @@
                     await interrupt();
                 }
                 const textArea = document.getElementById("code");
+                const text = textArea.value
+                document.cookie = `last=${btoa(text)};`
                 const result = document.getElementById("result");
                 const exec = {
                     interruptSet: false,
@@ -36,7 +38,7 @@
                     }
                 }
                 execution = exec;
-                execution.promise = document.compile(textArea.value, exec).catch(e => result.value += new String(e));
+                execution.promise = document.compile(text, exec).catch(e => result.value += new String(e));
             }
         </script>
         <style type="text/css">
@@ -61,19 +63,7 @@
     <body>
         <div class="row">
             <div class="column">
-                <textarea id="code" style="width: 95%; height: 90%; resize: none;">
-                    1
-                    2.5
-                    false
-                    true
-                    null
-                    (quote a)
-                    (quote 1)
-                    (quote 2.5)
-                    (quote false)
-                    (quote true)
-                    (quote null)
-                </textarea>
+                <textarea id="code" style="width: 95%; height: 90%; resize: none;"></textarea>
                 <button onclick="run()">Run</button>
                 <button onclick="interrupt()">Interrupt</button>
             </div>
@@ -82,4 +72,12 @@
             </div>
         </div>
     </body>
+    <script>
+        (() => {
+            const cc = document.cookie
+            if (!cc.startsWith('last=')) return;
+            const textArea = document.getElementById("code");
+            textArea.value = atob(cc.slice(5))
+        })()
+    </script>
 </html>
