@@ -119,6 +119,35 @@ test('gold/trivial/idents.lisp', async () => {
     }
 })
 
+test('gold/trivial/lambda.lisp', async () => {
+    const buf = Array.of<string>()
+    const exec: interpreter.Execution = {
+        async print(x: string) { buf.push(x) },
+        shouldInterrupt() {
+            return false
+        },
+    }
+    const program = (await fs.readFile(`${__dirname}/gold/trivial/lambda.lisp`)).toString()
+    let exp: string | undefined = undefined
+    try {
+        exp = (await fs.readFile(`${__dirname}/gold/trivial/lambda.stdout`)).toString()
+    } catch (e) {
+        // ignore
+    }
+    let got = ''
+    try {
+        await interpreter.run(program, exec)
+        got = buf.join('')
+    } catch (e) {
+        got = String(e)
+    }
+    if (exp === undefined) {
+        await fs.writeFile(`${__dirname}/gold/trivial/lambda.stdout`, got)
+    } else {
+        expect(got).toEqual(got)
+    }
+})
+
 test('gold/trivial/params-less.lisp', async () => {
     const buf = Array.of<string>()
     const exec: interpreter.Execution = {

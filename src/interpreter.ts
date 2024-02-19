@@ -25,7 +25,7 @@ class LexEnv {
         let cur: LexEnv = this;
         while (true) {
             if (cur.vars.has(k)) {
-                return cur.vars.get(k)
+                return cur.vars.get(k)!
             }
             if (cur.prev === cur) {
                 break;
@@ -57,14 +57,39 @@ enum FrameKind {
     REGULAR,
     WHILE,
     SET,
-    PROG
+    PROG,
+    RETURN
 }
 
-interface Frame {
+class Frame {
     kind: FrameKind
     lexEnv: LexEnv
     pc: number
-    list: Array<rt.Value>
+    list: rt.List<rt.Value>
+    traceAlso?: Frame
+    prevValues: number = -1
+
+    constructor(kind: FrameKind, lexEnv: LexEnv, pc: number, list: rt.List<rt.Value>, traceAlso?: Frame) {
+        this.kind = kind
+        this.lexEnv = lexEnv
+        this.pc = pc
+        this.list = list
+        this.traceAlso = traceAlso
+    }
+}
+
+class InterpreterFn extends rt.Fn {
+    lexEnv: LexEnv
+    params: Array<string>
+    body: rt.List<rt.Value>
+    pos?: ast.PosInfo
+
+    constructor(lexEnv: LexEnv, params: Array<string>, body: rt.List<rt.Value>, pos?: ast.PosInfo) {
+        super()
+        this.lexEnv = lexEnv
+        this.params = params
+        this.body = body
+    }
 }
 
 class Interpreter {
@@ -144,7 +169,14 @@ class Interpreter {
     private error(x: string): never {
         const stack = this.frames.flatMap(x => {
             const l = x.list as rt.List<rt.Value>
-            return l.posInfo !== undefined ? [l.posInfo] : []
+            const ret = []
+            if (l.posInfo !== undefined) {
+                ret.push(l.posInfo)
+            }
+            if (x.traceAlso !== undefined) {
+                ret.push(x.traceAlso)
+            }
+            return ret
         })
         throw new Error(x + "; stack:" + stack.map(t => `\n\t${JSON.stringify(t)}`).join(''))
     }
@@ -165,17 +197,15 @@ class Interpreter {
     private putValueOnStack(v: rt.Value): void {
         if (v instanceof Array) {
             const lexEnv = this.frames.length == 0 ? this.globalLexEnv : this.frames.at(-1)!.lexEnv
-            const frame = {
-                kind: FrameKind.REGULAR,
-                lexEnv: lexEnv,
-                pc: 0,
-                list: v,
-            }
+            const frame = new Frame(FrameKind.REGULAR, lexEnv, 0, v)
             this.frames.push(frame)
             if (v.length == 0) {
                 this.error("empty list not allowed in this context")
             }
-            const str = this.asString(v[0])
+            const str = v[0]
+            if (typeof str !== 'string') {
+                return
+            }
             switch (str) {
             case "setq": {
                 this.expectLen(v.length, 3)
@@ -193,8 +223,8 @@ class Interpreter {
             case "prog": {
                 frame.kind = FrameKind.PROG
                 frame.lexEnv = new LexEnv(frame.lexEnv)
-                if (frame.list.length <= 2) {
-                    this.error("expected list of length >= 3")
+                if (frame.list.length < 2) {
+                    this.error("`prog` expects arguments, got none")
                 }
                 if (!(frame.list[1] instanceof Array)) {
                     this.error("expected list of variables")
@@ -202,7 +232,33 @@ class Interpreter {
                 for (const o of frame.list[1]) {
                     frame.lexEnv.vars.set(this.asString(o), null)
                 }
+                this.valuesStack.push(null)
                 frame.pc = 2;
+                break;
+            }
+            case "lambda": {
+                if (frame.list.length < 2) {
+                    this.error("insufficient function body")
+                }
+                const args = frame.list[1]
+                if (!(args instanceof Array)) {
+                    this.error("args must be a list")
+                }
+                if (!args.every((x): x is string => typeof x == 'string')) {
+                    this.error("args must be a string")
+                }
+                const body: rt.List<rt.Value> = frame.list.slice(2)
+                body.posInfo = frame.list.posInfo
+                this.frames.pop()
+
+                const fn = new InterpreterFn(this.frames.at(-1)!.lexEnv, args, body, frame.list.posInfo);
+                this.valuesStack.push(fn);
+                break;
+            }
+            case "return": {
+                this.expectLen(frame.list.length, 2)
+                frame.kind = FrameKind.RETURN
+                frame.pc = 1
                 break;
             }
             default:
@@ -216,43 +272,69 @@ class Interpreter {
         }
     }
 
-    private async step(): Promise<void> {
+    private step(): void {
         if (this.exec.shouldInterrupt()) {
             return;
         }
         const frame = this.frames.at(-1)!
         if (frame.pc != frame.list.length) {
             const curArg = frame.list[frame.pc]
+            if (frame.kind == FrameKind.PROG) {
+                this.valuesStack.pop()
+            }
             frame.pc += 1
             this.putValueOnStack(curArg)
             return;
         }
         switch (frame.kind) {
         case FrameKind.PROG: {
-            const last = this.valuesStack.at(-1)
-            this.valuesStack.length -= frame.list.length - 2
-            this.valuesStack.push(last)
             this.frames.pop()
             break;
         }
         case FrameKind.SET: {
             this.frames.pop()
-            frame.lexEnv.set(frame.list[1] as string, this.valuesStack.pop())
+            frame.lexEnv.set(frame.list[1] as string, this.valuesStack.pop()!)
             this.valuesStack.push(null)
             break;
         }
         case FrameKind.REGULAR: {
-            const fn = this.valuesStack.at(-frame.list.length)
+            const fn = this.valuesStack.at(-frame.list.length) as rt.Value
             if (!(fn instanceof rt.Fn)) {
                 this.error(`function expected, got ${rt.reprType(fn)}`)
             }
-            this.frames.pop()
             const args = this.valuesStack.slice(this.valuesStack.length - frame.list.length + 1)
             this.valuesStack.length -= frame.list.length
             if (fn instanceof rt.RuntimeFn) {
                 const v = fn.fn(args)
                 if (v !== undefined) {
                     this.valuesStack.push(v)
+                }
+                this.frames.pop()
+            } else if (fn instanceof InterpreterFn) {
+                if (fn.params.length != args.length) {
+                    this.error(`wrong arguments number got ${fn.params.length}, expected ${args.length - 1}`)
+                }
+                const callerFrame = this.frames.pop()
+                const execEnv = new LexEnv(fn.lexEnv)
+                for (let i = 0; i < args.length; i++) {
+                    execEnv.vars.set(fn.params[i], args[i])
+                }
+                const calleeFrame = new Frame(FrameKind.PROG, execEnv, 0, fn.body, callerFrame)
+                calleeFrame.prevValues = this.valuesStack.length
+                this.frames.push(calleeFrame)
+                this.valuesStack.push(null)
+            }
+            break;
+        }
+        case FrameKind.RETURN: {
+            const r = this.valuesStack.pop() as rt.Value
+            for (let i = this.frames.length - 1; i >= 0; i--) {
+                const frame = this.frames[i]
+                if (frame.prevValues >= 0) {
+                    this.frames.length = i
+                    this.valuesStack.length = frame.prevValues
+                    this.valuesStack.push(r)
+                    break;
                 }
             }
             break;
@@ -265,12 +347,15 @@ class Interpreter {
 
     async run(vl: rt.Value): Promise<rt.Value> {
         this.putValueOnStack(vl)
+        let iter = 0
         while (this.frames.length != 0) {
-            if (this.exec.shouldInterrupt()) {
-                return null;
+            this.step();
+            if (iter++ == 128) {
+                await new Promise(p => setTimeout(p, 1))
+                if (this.exec.shouldInterrupt()) {
+                    return null;
+                }
             }
-            await this.step();
-            await new Promise(p => setTimeout(p, 0))
         }
         if (this.valuesStack.length != 1) {
             throw new Error("invalid stack size")
