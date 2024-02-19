@@ -22,14 +22,21 @@ module.exports = {
             ],
             "parserOptions": {
                 "sourceType": "script"
-            }
+            },
         }
     ],
-    "ignorePatterns": ["**/*.js", "test/**/*.ts"],
+    "ignorePatterns": ["**/*.js", "test/**/*.ts", "src/parser.ts", "src/index.ts"],
     "parserOptions": {
         "ecmaVersion": "latest"
     },
     "rules": {
-        "switch-exhaustiveness-check": "error"
+        "@typescript-eslint/switch-exhaustiveness-check": "error",
+        "@typescript-eslint/indent": ["error", "tab"],
+        "no-tabs": "off",
+        "@typescript-eslint/array-type": "off",
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-non-null-assertion": "off",
+        "@typescript-eslint/no-this-alias": "off",
+        "@typescript-eslint/no-extraneous-class": "off",
     }
 }
