@@ -10,8 +10,10 @@ npm run serve
 # ^ build + host locally a compiler
 ```
 
-## Testing
+## Before commit
 ```bash
+npx eslint --fix .
+# ^ run linter
 erb ./test/make-gold.erb > ./test/gold.ts
 # ^ generate golden tests
 npm run test
@@ -23,3 +25,8 @@ Specification is located in [docs](doc/spec.pdf)
 
 1. `List` and `Program` were allowed to be empty, otherwise `func` breaks
 2. `Atom` itself is considered to be a value, to allow `(quote x)`
+3. Some special forms were modified to be block statements by themselves:
+   - `(while Element Element+)`
+   - `(program Element Element+)`
+   - `(lambda List<Atom> Element+)`
+   - `(func Atom List<Atom> Element+)`

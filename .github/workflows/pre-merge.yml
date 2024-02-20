@@ -10,7 +10,7 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v4
       - run: sudo apt-get -y update
-      - run: sudo apt-get -y install ruby npm
+      - run: sudo apt-get -y install --no-install-recommends ruby npm
       - run: sudo npm install -g n
       - run: sudo n install 21.4
       - run: cd ${{ github.workspace }}
