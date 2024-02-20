@@ -56,18 +56,21 @@ enum FrameKind {
 	WHILE,
 	SET,
 	PROG,
-	RETURN
+	RETURN,
+	IF
 }
 
 class Frame {
 	kind: FrameKind
 	lexEnv: LexEnv
 	pc: number
-	list: rt.List<rt.Value>
+	list: rt.List
 	traceAlso?: Frame
+	ignoreAutoPush: boolean = false
 	prevValues: number = -1
+	isWhile: boolean = false
 
-	constructor (kind: FrameKind, lexEnv: LexEnv, pc: number, list: rt.List<rt.Value>, traceAlso?: Frame) {
+	constructor (kind: FrameKind, lexEnv: LexEnv, pc: number, list: rt.List, traceAlso?: Frame) {
 		this.kind = kind
 		this.lexEnv = lexEnv
 		this.pc = pc
@@ -79,14 +82,19 @@ class Frame {
 class InterpreterFn extends rt.Fn {
 	lexEnv: LexEnv
 	params: Array<string>
-	body: rt.List<rt.Value>
+	body: rt.List
 	pos?: ast.PosInfo
 
-	constructor (lexEnv: LexEnv, params: Array<string>, body: rt.List<rt.Value>, pos?: ast.PosInfo) {
+	constructor (lexEnv: LexEnv, params: Array<string>, body: rt.List, pos?: ast.PosInfo) {
 		super()
 		this.lexEnv = lexEnv
 		this.params = params
 		this.body = body
+		this.pos = pos
+	}
+
+	toString (): string {
+		return `<func ${JSON.stringify(this.pos)}>`
 	}
 }
 
@@ -110,7 +118,7 @@ class Interpreter {
 				this.exec.print(`${rt.reprType(o)}\n`)
 			}
 			return null
-		}))
+		}, 'print'))
 		this.globalLexEnv.set('print-top-scope', new rt.RuntimeFn((vls): rt.Value => {
 			for (const o of vls) {
 				if (o === null) {
@@ -119,7 +127,7 @@ class Interpreter {
 				this.exec.print(`${rt.reprType(o)}\n`)
 			}
 			return null
-		}))
+		}, 'print-top-scope'))
 		const addBop = (name: string, fn: (a: any, b: any) => rt.Value): void => {
 			this.globalLexEnv.set(name, new rt.RuntimeFn((vls): rt.Value => {
 				this.expectLen(vls.length, 2)
@@ -127,14 +135,14 @@ class Interpreter {
 					this.error('wrong arg types')
 				}
 				return fn(vls[0], vls[1])
-			}))
+			}, name))
 		}
 
 		const addUop = (name: string, fn: (a: any) => rt.Value): void => {
 			this.globalLexEnv.set(name, new rt.RuntimeFn((vls): rt.Value => {
 				this.expectLen(vls.length, 1)
 				return fn(vls[0]) as rt.Value
-			}))
+			}, name))
 		}
 
 		addBop('plus', (a, b) => a + b)
@@ -170,7 +178,7 @@ class Interpreter {
 			this.expectLen(vls.length, 1)
 			this.putValueOnStack(vls[0])
 			return null
-		}))
+		}, 'eval'))
 	}
 
 	private error (x: string): never {
@@ -201,10 +209,10 @@ class Interpreter {
 		}
 	}
 
-	private putValueOnStack (v: rt.Value): void {
+	private putValueOnStack (v: rt.Value, traceAlso?: Frame): void {
 		if (v instanceof Array) {
 			const lexEnv = this.frames.length === 0 ? this.globalLexEnv : this.frames.at(-1)!.lexEnv
-			const frame = new Frame(FrameKind.REGULAR, lexEnv, 0, v)
+			const frame = new Frame(FrameKind.REGULAR, lexEnv, 0, v, traceAlso)
 			this.frames.push(frame)
 			if (v.length === 0) {
 				this.error('empty list not allowed in this context')
@@ -254,7 +262,7 @@ class Interpreter {
 					if (!args.every((x): x is string => typeof x === 'string')) {
 						this.error('args must be a string')
 					}
-					const body: rt.List<rt.Value> = frame.list.slice(2)
+					const body: rt.List = frame.list.slice(2)
 					body.posInfo = frame.list.posInfo
 					this.frames.pop()
 
@@ -262,10 +270,48 @@ class Interpreter {
 					this.valuesStack.push(fn)
 					break
 				}
+				case 'func': {
+					if (frame.list.length < 3) {
+						this.error('not enough arguments for function')
+					}
+					this.frames.pop()
+					const lam: rt.List = ['lambda', frame.list[2]].concat(frame.list.splice(3))
+					lam.posInfo = frame.list.posInfo
+					const lst: rt.List = ['setq', frame.list[1], lam]
+					lst.posInfo = frame.list.posInfo
+					this.putValueOnStack(lst)
+					break
+				}
 				case 'return': {
 					this.expectLen(frame.list.length, 2)
 					frame.kind = FrameKind.RETURN
 					frame.pc = 1
+					break
+				}
+				case 'while': {
+					if (frame.list.length < 3) {
+						this.error('while: not enough arguments')
+					}
+					frame.kind = FrameKind.WHILE
+					frame.prevValues = this.valuesStack.length
+					frame.pc = 1
+					frame.isWhile = true
+					frame.ignoreAutoPush = true
+					this.valuesStack.push(null)
+					break
+				}
+				case 'cond': {
+					if (frame.list.length !== 4) {
+						this.error('while: not enough arguments')
+					}
+					frame.kind = FrameKind.IF
+					frame.pc = 1
+					frame.ignoreAutoPush = true
+					break
+				}
+				case 'break': {
+					this.expectLen(frame.list.length, 1)
+					this.returnTo(null, true)
 					break
 				}
 				default:
@@ -279,12 +325,25 @@ class Interpreter {
 		}
 	}
 
+	private returnTo (pushVal: rt.Value, isWhile: boolean): void {
+		for (let i = this.frames.length - 1; i >= 0; i--) {
+			const frame = this.frames[i]
+			if (frame.prevValues >= 0 && frame.isWhile === isWhile) {
+				this.frames.length = i
+				this.valuesStack.length = frame.prevValues
+				this.valuesStack.push(pushVal)
+				return
+			}
+		}
+		this.error('can\'t unroll stack')
+	}
+
 	private step (): void {
 		if (this.exec.shouldInterrupt()) {
 			return
 		}
 		const frame = this.frames.at(-1)!
-		if (frame.pc !== frame.list.length) {
+		if (frame.pc !== frame.list.length && !frame.ignoreAutoPush) {
 			const curArg = frame.list[frame.pc]
 			if (frame.kind === FrameKind.PROG) {
 				this.valuesStack.pop()
@@ -319,7 +378,7 @@ class Interpreter {
 					this.frames.pop()
 				} else if (fn instanceof InterpreterFn) {
 					if (fn.params.length !== args.length) {
-						this.error(`wrong arguments number got ${fn.params.length}, expected ${args.length - 1}`)
+						this.error(`wrong arguments number got ${args.length}, expected ${fn.params.length} for ${fn.toString()}`)
 					}
 					const callerFrame = this.frames.pop()
 					const execEnv = new LexEnv(fn.lexEnv)
@@ -335,19 +394,45 @@ class Interpreter {
 			}
 			case FrameKind.RETURN: {
 				const r = this.valuesStack.pop() as rt.Value
-				for (let i = this.frames.length - 1; i >= 0; i--) {
-					const frame = this.frames[i]
-					if (frame.prevValues >= 0) {
-						this.frames.length = i
-						this.valuesStack.length = frame.prevValues
-						this.valuesStack.push(r)
-						break
+				this.returnTo(r, false)
+				break
+			}
+			case FrameKind.WHILE: {
+				if (frame.pc === 1) {
+					this.valuesStack.pop()
+					this.putValueOnStack(frame.list[1])
+					frame.pc = 2
+				} else {
+					frame.pc = 1
+					const vl = this.valuesStack.pop() as rt.Value
+					if (typeof vl !== 'boolean') {
+						this.error(`while condition is not boolean: ${rt.reprType(vl)}`)
+					}
+					if (!vl) {
+						this.frames.pop()
+						this.valuesStack.push(null)
+					} else {
+						const f = new Frame(FrameKind.PROG, frame.lexEnv, 0, frame.list.slice(2))
+						this.frames.push(f)
+						this.valuesStack.push(null)
 					}
 				}
 				break
 			}
-			case FrameKind.WHILE: {
-				this.error('todo')
+			case FrameKind.IF: {
+				if (frame.pc === 1) {
+					this.putValueOnStack(frame.list[1])
+					frame.pc += 1
+				} else {
+					const vl = this.valuesStack.pop() as rt.Value
+					if (typeof vl !== 'boolean') {
+						this.error(`cond: expected boolean, got ${rt.reprType(vl)}`)
+					}
+					const oldFame = this.frames.pop()
+					const newVal = vl ? frame.list[2] : frame.list[3]
+					this.putValueOnStack(newVal, oldFame)
+				}
+				break
 			}
 		}
 	}
@@ -365,7 +450,7 @@ class Interpreter {
 			}
 		}
 		if (this.valuesStack.length !== 1) {
-			throw new Error('invalid stack size')
+			throw new Error(`invalid values stack size ${this.valuesStack.length}:\n${this.valuesStack.map(rt.reprType).join('\n')}\n`)
 		}
 		return this.valuesStack[0]
 	}
@@ -385,7 +470,7 @@ export async function run (program: string, exec: Execution): Promise<rt.Value> 
 	const interp = new Interpreter(exec)
 	interp.fillBuiltins()
 
-	const topScope: rt.List<rt.Value> = ['prog' as rt.Value, []].concat(prog.map(x => ['print-top-scope', x[0]]))
+	const topScope: rt.List = ['prog' as rt.Value, []].concat(prog.map(x => ['print-top-scope', x[0]]))
 
 	return await interp.run(topScope)
 }

@@ -1,21 +1,29 @@
 import type * as ast from './ast'
 
-export class Fn {}
+export abstract class Fn {
+	abstract toString (): string
+}
 
 export class RuntimeFn extends Fn {
+	name: string
 	fn: (vals: Array<Value>) => Value | undefined
 
-	constructor (fn: (vals: Array<Value>) => Value | undefined) {
+	constructor (fn: (vals: Array<Value>) => Value | undefined, name: string = '<runtime>') {
 		super()
 		this.fn = fn
+		this.name = name
+	}
+
+	toString (): string {
+		return this.name
 	}
 }
 
-export interface List<T> extends Array<T> {
+export interface List extends Array<Value> {
 	posInfo?: ast.PosInfo
 }
 
-export type Value = ast.Value | string | List<Value> | Fn
+export type Value = ast.Value | string | List | Fn
 
 export async function transform (prog: Array<[ast.PosInfo, ast.Expr]>): Promise<Array<[Value, ast.PosInfo]>> {
 	const dfs = (a: ast.Expr): Value => {
@@ -25,7 +33,7 @@ export async function transform (prog: Array<[ast.PosInfo, ast.Expr]>): Promise<
 			case 'literal':
 				return a.value
 			case 'app': {
-				const r: List<Value> = a.exprs.map(dfs)
+				const r: List = a.exprs.map(dfs)
 				r.posInfo = a.pos
 				return r
 			}
@@ -39,6 +47,8 @@ export function reprType (v: Value): string {
 	return JSON.stringify(v, (k, v) => {
 		if (typeof v === 'bigint') {
 			return `int:${v.toString()}`
+		} else if (v instanceof Fn) {
+			return `<fn ${v.toString()}>`
 		} else {
 			return v
 		}
