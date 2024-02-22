@@ -148,6 +148,35 @@ test('gold/trivial/eval-is-func.lisp', async () => {
     }
 })
 
+test('gold/trivial/evals.lisp', async () => {
+    const buf = Array.of<string>()
+    const exec: interpreter.Execution = {
+        async print(x: string) { buf.push(x) },
+        shouldInterrupt() {
+            return false
+        },
+    }
+    const program = (await fs.readFile(`${__dirname}/gold/trivial/evals.lisp`)).toString()
+    let exp: string | undefined = undefined
+    try {
+        exp = (await fs.readFile(`${__dirname}/gold/trivial/evals.stdout`)).toString()
+    } catch (e) {
+        // ignore
+    }
+    let got = ''
+    try {
+        await interpreter.run(program, exec)
+        got = buf.join('')
+    } catch (e) {
+        got = String(e)
+    }
+    if (exp === undefined) {
+        await fs.writeFile(`${__dirname}/gold/trivial/evals.stdout`, got)
+    } else {
+        expect(got).toEqual(got)
+    }
+})
+
 test('gold/trivial/func-scope.lisp', async () => {
     const buf = Array.of<string>()
     const exec: interpreter.Execution = {
@@ -230,6 +259,35 @@ test('gold/trivial/lambda.lisp', async () => {
     }
     if (exp === undefined) {
         await fs.writeFile(`${__dirname}/gold/trivial/lambda.stdout`, got)
+    } else {
+        expect(got).toEqual(got)
+    }
+})
+
+test('gold/trivial/lst-fn.lisp', async () => {
+    const buf = Array.of<string>()
+    const exec: interpreter.Execution = {
+        async print(x: string) { buf.push(x) },
+        shouldInterrupt() {
+            return false
+        },
+    }
+    const program = (await fs.readFile(`${__dirname}/gold/trivial/lst-fn.lisp`)).toString()
+    let exp: string | undefined = undefined
+    try {
+        exp = (await fs.readFile(`${__dirname}/gold/trivial/lst-fn.stdout`)).toString()
+    } catch (e) {
+        // ignore
+    }
+    let got = ''
+    try {
+        await interpreter.run(program, exec)
+        got = buf.join('')
+    } catch (e) {
+        got = String(e)
+    }
+    if (exp === undefined) {
+        await fs.writeFile(`${__dirname}/gold/trivial/lst-fn.stdout`, got)
     } else {
         expect(got).toEqual(got)
     }
