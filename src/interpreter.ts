@@ -141,7 +141,7 @@ class Interpreter {
 		const addUop = (name: string, fn: (a: any) => rt.Value): void => {
 			this.globalLexEnv.set(name, new rt.RuntimeFn((vls): rt.Value => {
 				this.expectLen(vls.length, 1)
-				return fn(vls[0]) as rt.Value
+				return fn(vls[0])
 			}, name))
 		}
 
@@ -164,8 +164,8 @@ class Interpreter {
 		addUop('isatom', x => typeof x === 'string')
 		addUop('islist', x => x instanceof Array)
 
-		addBop('and', (a, b) => a & b)
-		addBop('or', (a, b) => a | b)
+		addBop('or', (a, b) => (typeof a === 'boolean' && typeof b === 'boolean') ? (a && b) : (a & b))
+		addBop('or', (a, b) => (typeof a === 'boolean' && typeof b === 'boolean') ? (a || b) : (a | b))
 		addBop('xor', (a, b) => a ^ b)
 		addUop('not', (a) => {
 			if (typeof a !== 'boolean') {
@@ -174,11 +174,56 @@ class Interpreter {
 			return !a
 		})
 
-		this.globalLexEnv.set('eval', new rt.RuntimeFn((vls): rt.Value => {
+		this.globalLexEnv.set('eval', new rt.RuntimeFn((vls): rt.Value | undefined => {
 			this.expectLen(vls.length, 1)
+			this.frames.pop()
 			this.putValueOnStack(vls[0])
-			return null
+			return undefined
 		}, 'eval'))
+
+		addUop('head', (v: any): rt.Value => {
+			if (!(v instanceof Array)) {
+				this.error(`expected array, got ${rt.reprType(v as rt.Value)}`)
+			}
+			if (v.length === 0) {
+				this.error('accessing head of empty list')
+			}
+			return v[0]
+		})
+
+		addUop('tail', (v: any): rt.Value => {
+			if (!(v instanceof Array)) {
+				this.error(`expected array, got ${rt.reprType(v as rt.Value)}`)
+			}
+			if (v.length === 0) {
+				this.error('accessing tail of empty list')
+			}
+			return v.slice(1)
+		})
+
+		addUop('isempty', (v: any): rt.Value => {
+			if (!(v instanceof Array)) {
+				this.error(`expected array, got ${rt.reprType(v as rt.Value)}`)
+			}
+			return v.length === 0
+		})
+
+		this.globalLexEnv.set('cons', new rt.RuntimeFn((vls): rt.Value => {
+			this.expectLen(vls.length, 2)
+			const l = vls[0]
+			const b = vls[1]
+			if (!(b instanceof Array)) {
+				this.error(`expected array, got ${rt.reprType(b)}`)
+			}
+			return Array.of<rt.Value>(l, ...b)
+		}, 'cons'))
+
+		this.globalLexEnv.set('concat', new rt.RuntimeFn((vls): rt.Value => {
+			if (!vls.every((x): x is rt.List => x instanceof Array)) {
+				this.error('can\'t concat non-arrays')
+			}
+			return Array.of<rt.Value>().concat(...vls)
+		}, 'concat'))
 	}
 
 	private error (x: string): never {
@@ -189,7 +234,10 @@ class Interpreter {
 				ret.push(l.posInfo)
 			}
 			if (x.traceAlso !== undefined) {
-				ret.push(x.traceAlso)
+				const p = x.traceAlso.list.posInfo
+				if (p !== undefined) {
+					ret.push(p)
+				}
 			}
 			return ret
 		})
@@ -373,9 +421,9 @@ class Interpreter {
 				if (fn instanceof rt.RuntimeFn) {
 					const v = fn.fn(args)
 					if (v !== undefined) {
+						this.frames.pop()
 						this.valuesStack.push(v)
 					}
-					this.frames.pop()
 				} else if (fn instanceof InterpreterFn) {
 					if (fn.params.length !== args.length) {
 						this.error(`wrong arguments number got ${args.length}, expected ${fn.params.length} for ${fn.toString()}`)
@@ -443,6 +491,7 @@ class Interpreter {
 		while (this.frames.length !== 0) {
 			this.step()
 			if (iter++ === 128) {
+				iter = 0
 				await new Promise(resolve => setTimeout(resolve, 1))
 				if (this.exec.shouldInterrupt()) {
 					return null

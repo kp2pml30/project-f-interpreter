@@ -16,10 +16,10 @@
                 result.value += "Interrupting...\n";
                 try {
                     await execution.promise;
-                    result.value = "";
                 } catch (e) {
-                    result.value = new String(e);
+                    result.value += String(e);
                 }
+                result.value += "Interrupted.\n";
                 execution = undefined;
             }
             async function run() {
@@ -30,6 +30,7 @@
                 const text = textArea.value
                 document.cookie = `last=${btoa(text)};`
                 const result = document.getElementById("result");
+                result.value = ''
                 const exec = {
                     interruptSet: false,
                     print: (x) => { result.value += x },
