@@ -20,6 +20,18 @@
 *         .expr = ast.Expr { return this.e.expr }
 *     | e=ident
 *         .expr = ast.Expr { return this.e.expr }
+*     | pos=@ '\'' _ e=element
+*         .expr = ast.Application {
+*             return {
+*                 kind: "app",
+*                 pos: this.pos,
+*                 exprs: Array.of<ast.Expr>({
+*                     kind: "ident",
+*                     pos: this.pos,
+*                     name: "quote",
+*                 }, this.e.expr)
+*             }
+*         }
 * literal :=
 *     e=integer
 *         .expr = ast.Expr { return this.e.expr }
@@ -72,6 +84,7 @@ export enum ASTKinds {
     element_1 = "element_1",
     element_2 = "element_2",
     element_3 = "element_3",
+    element_4 = "element_4",
     literal_1 = "literal_1",
     literal_2 = "literal_2",
     literal_3 = "literal_3",
@@ -121,7 +134,7 @@ export interface list_$0 {
     kind: ASTKinds.list_$0;
     els: element;
 }
-export type element = element_1 | element_2 | element_3;
+export type element = element_1 | element_2 | element_3 | element_4;
 export class element_1 {
     public kind: ASTKinds.element_1 = ASTKinds.element_1;
     public e: list;
@@ -152,6 +165,27 @@ export class element_3 {
         this.e = e;
         this.expr = ((): ast.Expr => {
         return this.e.expr
+        })();
+    }
+}
+export class element_4 {
+    public kind: ASTKinds.element_4 = ASTKinds.element_4;
+    public pos: PosInfo;
+    public e: element;
+    public expr: ast.Application;
+    constructor(pos: PosInfo, e: element){
+        this.pos = pos;
+        this.e = e;
+        this.expr = ((): ast.Application => {
+        return {
+                kind: "app",
+                pos: this.pos,
+                exprs: Array.of<ast.Expr>({
+                    kind: "ident",
+                    pos: this.pos,
+                    name: "quote",
+                }, this.e.expr)
+            }
         })();
     }
 }
@@ -370,6 +404,7 @@ export class Parser {
             () => this.matchelement_1($$dpth + 1, $$cr),
             () => this.matchelement_2($$dpth + 1, $$cr),
             () => this.matchelement_3($$dpth + 1, $$cr),
+            () => this.matchelement_4($$dpth + 1, $$cr),
         ]);
     }
     public matchelement_1($$dpth: number, $$cr?: ErrorTracker): Nullable<element_1> {
@@ -407,6 +442,23 @@ export class Parser {
                     && ($scope$e = this.matchident($$dpth + 1, $$cr)) !== null
                 ) {
                     $$res = new element_3($scope$e);
+                }
+                return $$res;
+            });
+    }
+    public matchelement_4($$dpth: number, $$cr?: ErrorTracker): Nullable<element_4> {
+        return this.run<element_4>($$dpth,
+            () => {
+                let $scope$pos: Nullable<PosInfo>;
+                let $scope$e: Nullable<element>;
+                let $$res: Nullable<element_4> = null;
+                if (true
+                    && ($scope$pos = this.mark()) !== null
+                    && this.regexAccept(String.raw`(?:\')`, "", $$dpth + 1, $$cr) !== null
+                    && this.match_($$dpth + 1, $$cr) !== null
+                    && ($scope$e = this.matchelement($$dpth + 1, $$cr)) !== null
+                ) {
+                    $$res = new element_4($scope$pos, $scope$e);
                 }
                 return $$res;
             });

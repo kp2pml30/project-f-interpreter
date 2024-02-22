@@ -21,6 +21,18 @@ element :=
         .expr = ast.Expr { return this.e.expr }
     | e=ident
         .expr = ast.Expr { return this.e.expr }
+    | pos=@ '\'' _ e=element
+        .expr = ast.Application {
+            return {
+                kind: "app",
+                pos: this.pos,
+                exprs: Array.of<ast.Expr>({
+                    kind: "ident",
+                    pos: this.pos,
+                    name: "quote",
+                }, this.e.expr)
+            }
+        }
 
 literal :=
     e=integer

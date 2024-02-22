@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises'
 
 const { describe, test, expect } = require('@jest/globals');
 
-test('gold/algo/quick-sort.lisp', async () => {
+test('gold/algo/lst-fn.lisp', async () => {
     const buf = Array.of<string>()
     const exec: interpreter.Execution = {
         async print(x: string) { buf.push(x) },
@@ -11,10 +11,10 @@ test('gold/algo/quick-sort.lisp', async () => {
             return false
         },
     }
-    const program = (await fs.readFile(`${__dirname}/gold/algo/quick-sort.lisp`)).toString()
+    const program = (await fs.readFile(`${__dirname}/gold/algo/lst-fn.lisp`)).toString()
     let exp: string | undefined = undefined
     try {
-        exp = (await fs.readFile(`${__dirname}/gold/algo/quick-sort.stdout`)).toString()
+        exp = (await fs.readFile(`${__dirname}/gold/algo/lst-fn.stdout`)).toString()
     } catch (e) {
         // ignore
     }
@@ -26,7 +26,7 @@ test('gold/algo/quick-sort.lisp', async () => {
         got = String(e)
     }
     if (exp === undefined) {
-        await fs.writeFile(`${__dirname}/gold/algo/quick-sort.stdout`, got)
+        await fs.writeFile(`${__dirname}/gold/algo/lst-fn.stdout`, got)
     } else {
         expect(got).toEqual(got)
     }
@@ -264,35 +264,6 @@ test('gold/trivial/lambda.lisp', async () => {
     }
 })
 
-test('gold/trivial/lst-fn.lisp', async () => {
-    const buf = Array.of<string>()
-    const exec: interpreter.Execution = {
-        async print(x: string) { buf.push(x) },
-        shouldInterrupt() {
-            return false
-        },
-    }
-    const program = (await fs.readFile(`${__dirname}/gold/trivial/lst-fn.lisp`)).toString()
-    let exp: string | undefined = undefined
-    try {
-        exp = (await fs.readFile(`${__dirname}/gold/trivial/lst-fn.stdout`)).toString()
-    } catch (e) {
-        // ignore
-    }
-    let got = ''
-    try {
-        await interpreter.run(program, exec)
-        got = buf.join('')
-    } catch (e) {
-        got = String(e)
-    }
-    if (exp === undefined) {
-        await fs.writeFile(`${__dirname}/gold/trivial/lst-fn.stdout`, got)
-    } else {
-        expect(got).toEqual(got)
-    }
-})
-
 test('gold/trivial/params-less.lisp', async () => {
     const buf = Array.of<string>()
     const exec: interpreter.Execution = {
@@ -375,6 +346,35 @@ test('gold/trivial/program-scope.lisp', async () => {
     }
     if (exp === undefined) {
         await fs.writeFile(`${__dirname}/gold/trivial/program-scope.stdout`, got)
+    } else {
+        expect(got).toEqual(got)
+    }
+})
+
+test('gold/trivial/quote-symbol.lisp', async () => {
+    const buf = Array.of<string>()
+    const exec: interpreter.Execution = {
+        async print(x: string) { buf.push(x) },
+        shouldInterrupt() {
+            return false
+        },
+    }
+    const program = (await fs.readFile(`${__dirname}/gold/trivial/quote-symbol.lisp`)).toString()
+    let exp: string | undefined = undefined
+    try {
+        exp = (await fs.readFile(`${__dirname}/gold/trivial/quote-symbol.stdout`)).toString()
+    } catch (e) {
+        // ignore
+    }
+    let got = ''
+    try {
+        await interpreter.run(program, exec)
+        got = buf.join('')
+    } catch (e) {
+        got = String(e)
+    }
+    if (exp === undefined) {
+        await fs.writeFile(`${__dirname}/gold/trivial/quote-symbol.stdout`, got)
     } else {
         expect(got).toEqual(got)
     }
