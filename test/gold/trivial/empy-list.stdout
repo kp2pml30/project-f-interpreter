@@ -1,3 +1,2 @@
 Error: empty list not allowed in this context; stack:
-	{"overallPos":0,"line":1,"offset":0}
-	{"overallPos":0,"line":1,"offset":0}
+	{"overallPos":4,"line":2,"offset":0}

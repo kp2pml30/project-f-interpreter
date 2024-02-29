@@ -160,7 +160,7 @@ class Interpreter {
 		addUop('isint', x => typeof x === 'bigint')
 		addUop('isreal', x => typeof x === 'number')
 		addUop('isbool', x => typeof x === 'boolean')
-		addUop('isnull', x => x === null)
+		addUop('isnull', x => (x === null) || x.length === 0) // TODO(kprokopenko): rework lists
 		addUop('isatom', x => typeof x === 'string')
 		addUop('islist', x => x instanceof Array)
 
@@ -199,13 +199,6 @@ class Interpreter {
 				this.error('accessing tail of empty list')
 			}
 			return v.slice(1)
-		})
-
-		addUop('isempty', (v: any): rt.Value => {
-			if (!(v instanceof Array)) {
-				this.error(`expected array, got ${rt.reprType(v as rt.Value)}`)
-			}
-			return v.length === 0
 		})
 
 		this.globalLexEnv.set('cons', new rt.RuntimeFn((vls): rt.Value => {

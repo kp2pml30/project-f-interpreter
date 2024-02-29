@@ -19,6 +19,7 @@ export class RuntimeFn extends Fn {
 	}
 }
 
+// TODO(kprokopenko): rework lists
 export interface List extends Array<Value> {
 	posInfo?: ast.PosInfo
 }
